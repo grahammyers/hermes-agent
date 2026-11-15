@@ -1,6 +1,6 @@
 import { Button } from "@nous-research/ui/ui/components/button";
 import { AlertTriangle } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn, themedBody } from "@/lib/utils";
 
@@ -28,19 +28,23 @@ export function ConfirmDialog({
   title,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCancelRef = useRef(onCancel);
+  const loadingRef = useRef(loading);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    onCancelRef.current = onCancel;
+    loadingRef.current = loading;
+  }, [onCancel, loading]);
+
+  useLayoutEffect(() => {
     if (!open) return;
 
     const prevActive = document.activeElement as HTMLElement | null;
-    dialogRef.current
-      ?.querySelector<HTMLButtonElement>("[data-confirm]")
-      ?.focus();
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        e.stopPropagation();
+        if (!loadingRef.current) onCancelRef.current();
       }
     };
 
@@ -53,7 +57,17 @@ export function ConfirmDialog({
       document.body.style.overflow = prevOverflow;
       prevActive?.focus?.();
     };
-  }, [open, onCancel]);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const focusTarget = loading
+      ? null
+      : dialogRef.current?.querySelector<HTMLButtonElement>(
+          destructive ? "button[data-cancel]" : "button[data-confirm]",
+        );
+    (focusTarget ?? dialogRef.current)?.focus();
+  }, [open, loading, destructive]);
 
   if (!open) return null;
 
@@ -64,12 +78,13 @@ export function ConfirmDialog({
       aria-labelledby="confirm-dialog-title"
       aria-describedby={description ? "confirm-dialog-desc" : undefined}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
+        if (e.target === e.currentTarget && !loading) onCancel();
       }}
       className="fixed inset-0 z-[200] flex items-center justify-center bg-background/85 p-4"
     >
       <div
         ref={dialogRef}
+        tabIndex={-1}
         className={cn(
           themedBody,
           "relative w-full max-w-md border border-border bg-card shadow-2xl",
@@ -102,7 +117,13 @@ export function ConfirmDialog({
         </div>
 
         <div className="flex items-center justify-end gap-2 p-3">
-          <Button type="button" outlined onClick={onCancel} disabled={loading}>
+          <Button
+            data-cancel
+            type="button"
+            outlined
+            onClick={onCancel}
+            disabled={loading}
+          >
             {cancelLabel}
           </Button>
           <Button
