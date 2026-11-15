@@ -117,6 +117,11 @@ export function ModelPickerDialog(props: Props) {
     useState<PendingExpensiveConfirm | null>(null);
   const closedRef = useRef(false);
 
+  const requestClose = () => {
+    if (applying || pendingConfirm) return;
+    onClose();
+  };
+
   const applyOptions = (r: ModelOptionsResponse) => {
     const next = r?.providers ?? [];
     setProviders(next);
@@ -195,12 +200,13 @@ export function ModelPickerDialog(props: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onClose();
+        e.stopPropagation();
+        if (!applying && !pendingConfirm) onClose();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, applying, pendingConfirm]);
 
   const selectedProvider = useMemo(
     () => providers.find((p) => p.slug === selectedSlug) ?? null,
@@ -342,7 +348,7 @@ export function ModelPickerDialog(props: Props) {
   return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-background/85 p-4"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && requestClose()}
       role="dialog"
       aria-modal="true"
       aria-labelledby="model-picker-title"
@@ -351,7 +357,8 @@ export function ModelPickerDialog(props: Props) {
         <Button
           ghost
           size="icon"
-          onClick={onClose}
+          onClick={requestClose}
+          disabled={applying || !!pendingConfirm}
           className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
           aria-label="Close"
         >
@@ -451,7 +458,7 @@ export function ModelPickerDialog(props: Props) {
               {refreshing ? <Spinner /> : <RefreshCw className="h-3.5 w-3.5" />}
               Refresh Models
             </Button>
-            <Button outlined onClick={onClose} disabled={applying}>
+            <Button outlined onClick={requestClose} disabled={applying || !!pendingConfirm}>
               Cancel
             </Button>
             <Button onClick={confirm} disabled={!canConfirm}>
@@ -468,7 +475,9 @@ export function ModelPickerDialog(props: Props) {
         confirmLabel="Switch anyway"
         cancelLabel="Cancel"
         loading={applying}
-        onCancel={() => setPendingConfirm(null)}
+        onCancel={() => {
+          if (!applying) setPendingConfirm(null);
+        }}
         onConfirm={() => {
           const pending = pendingConfirm;
           if (!pending) return;
